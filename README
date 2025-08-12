@@ -5,9 +5,10 @@ idioms as I learn those.
 Features
 --------
 - Compiles the instruction to its own bytecode before running
+- erm... runs... brainf*ck code maybe?
 
-TODO
-----
+TODO / issues
+-------------
 - Implement "Read" instruction (`,`)
 - Produce bytecode for richer idioms, such as `[-]` to set a register to zero
 - I think the REPL is broken
@@ -15,6 +16,7 @@ TODO
 - Audit the data structures I'm using. I'm sure I can use far more compact ones
 - Performance is not great. On my 12th-gen Intel Framework laptop, it runs `mandelbrot.bf` in 13±2 seconds
 - Run `hello-world.bf` and `mandelbrot.bf` as part of the test suite
+- Get rid of the tokenizer, as it's doing virtually nothing useful...
 
 Language
 --------

@@ -7,6 +7,8 @@ pub enum ParseError {
     UnbalancedBrackets,
 }
 
+impl std::error::Error for ParseError {}
+
 impl Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Unbalanced brackets")
@@ -26,40 +28,30 @@ pub enum Statement {
 }
 
 pub fn parse(tokens: &[Token]) -> Result<Vec<Statement>, ParseError> {
-    let mut depth = 0;
+    let mut depth = 0u8;
     let mut instructions: Vec<Statement> = vec![];
 
     // Have to use an explicit loop because my function wasn't being TCO'd for some reason
-    for token in tokens.iter() {
-        match *token {
-            Token::MovePointerLeft => {
-                instructions.push(Statement::ShiftLeft);
-            }
-            Token::MovePointerRight => {
-                instructions.push(Statement::ShiftRight);
-            }
-            Token::Increment => {
-                instructions.push(Statement::Increment);
-            }
-            Token::Decrement => {
-                instructions.push(Statement::Decrement);
-            }
-            Token::Print => {
-                instructions.push(Statement::Print);
-            }
-            Token::Read => {
-                instructions.push(Statement::Read);
-            }
+    for token in tokens {
+        let instruction = match *token {
+            Token::MovePointerLeft => Statement::ShiftLeft,
+            Token::MovePointerRight => Statement::ShiftRight,
+            Token::Increment => Statement::Increment,
+            Token::Decrement => Statement::Decrement,
+            Token::Print => Statement::Print,
+            Token::Read => Statement::Read,
             Token::LeftBracket => {
-                instructions.push(Statement::JumpIfZero(depth));
+                let s = Statement::JumpIfZero(depth);
                 depth += 1;
+                s
             }
 
             Token::RightBracket => {
                 depth -= 1;
-                instructions.push(Statement::JumpIfNotZero(depth));
+                Statement::JumpIfNotZero(depth)
             }
-        }
+        };
+        instructions.push(instruction);
     }
 
     if depth != 0 {

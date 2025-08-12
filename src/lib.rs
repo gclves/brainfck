@@ -11,7 +11,7 @@ use vm::VM;
 use crate::vm::compile;
 
 pub fn repl() {
-    let mut machine = VM::new();
+    let mut machine = VM::default();
     let mut line = String::new();
 
     loop {

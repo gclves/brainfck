@@ -24,65 +24,52 @@ enum State {
     Shift(i32),
 }
 
-impl VM {
-    pub fn new() -> Self {
+impl Default for VM {
+    fn default() -> Self {
         Self {
             i_ptr: 0,
             mem_ptr: 0,
             memory: [0; MEMORY_CELLS],
         }
     }
+}
 
+impl VM {
     pub fn eval(&mut self, expr: &[Instruction]) {
-        let i_size = expr.len();
-
-        loop {
-            if self.i_ptr >= i_size {
-                break;
-            }
-
-            let instruction = &expr[self.i_ptr];
+        while let Some(instruction) = expr.get(self.i_ptr) {
             let cell = &mut self.memory[self.mem_ptr];
 
             match instruction {
-                &Instruction::Increment(n) => {
+                Instruction::Increment(n) => {
                     // TODO: Handle memory cell becoming negative
-                    *cell = (*cell).saturating_add_signed(n.try_into().unwrap());
-                    self.i_ptr += 1;
+                    *cell = (*cell).saturating_add_signed(*n as i8);
                 }
-                &Instruction::Shift(n) => {
-                    let target: usize = if n > 0 {
+                Instruction::Shift(n) => {
+                    let target: usize = if *n > 0 {
                         // TODO: handle going past the edge
-                        self.mem_ptr.saturating_add(n.try_into().unwrap())
+                        self.mem_ptr.saturating_add(*n as usize)
                     } else {
                         // TODO: handle going below zero
                         self.mem_ptr.saturating_sub(n.neg().try_into().unwrap())
                     };
                     self.mem_ptr = target;
-                    self.i_ptr += 1;
                 }
-                &Instruction::Print => {
+                Instruction::Print => {
                     print!("{}", *cell as char);
-                    self.i_ptr += 1;
                 }
-                &Instruction::JumpIfZero(target) => {
-                    if *cell != 0 {
-                        self.i_ptr += 1;
-                    } else {
-                        self.i_ptr = target;
-                        // These are matched, otherwise we'd have gotten a syntax error
-                    }
+                Instruction::JumpIfZero(target) if *cell == 0 => {
+                    self.i_ptr = *target;
+                    continue;
+                    // These are matched, otherwise we'd have gotten a syntax error
                 }
-                &Instruction::JumpIfNotZero(target) => {
-                    if *cell == 0 {
-                        self.i_ptr += 1;
-                    } else {
-                        self.i_ptr = target;
-                    }
-                } // Statement::Read => {
-                  //     todo!("Instruction::Read not implemented at runtime");
-                  // }
+                Instruction::JumpIfNotZero(target) if *cell != 0 => {
+                    self.i_ptr = *target;
+                    continue;
+                }
+                _ => {}
             }
+
+            self.i_ptr += 1;
         }
     }
 }
@@ -132,6 +119,12 @@ pub fn compile(instructions: &[Statement]) -> Vec<Instruction> {
     }
     flush_and_reset(&mut state, &mut bytecode);
 
+    resolve_jumps(&mut bytecode);
+    // TODO: Add a "program return" instruction at the end of every program
+    bytecode
+}
+
+fn resolve_jumps(bytecode: &mut [Instruction]) -> () {
     for i in 0..bytecode.len() {
         match bytecode[i] {
             Instruction::JumpIfZero(n) => {
@@ -147,8 +140,6 @@ pub fn compile(instructions: &[Statement]) -> Vec<Instruction> {
             _ => {}
         }
     }
-
-    bytecode
 }
 
 #[cfg(test)]
