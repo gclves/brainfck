@@ -1,5 +1,4 @@
 use crate::parser::Statement;
-use std::ops::Neg;
 
 const MEMORY_CELLS: usize = 30000;
 
@@ -18,10 +17,16 @@ pub enum Instruction {
     JumpIfNotZero(usize),
 }
 
-enum State {
+enum CompilerState {
     Initial,
     Increment(i32),
     Shift(i32),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum RuntimeError {
+    NegativeRegister,
+    NoMoreCells,
 }
 
 impl Default for VM {
@@ -37,75 +42,91 @@ impl Default for VM {
 impl VM {
     pub fn eval(&mut self, expr: &[Instruction]) {
         while let Some(instruction) = expr.get(self.i_ptr) {
-            let cell = &mut self.memory[self.mem_ptr];
-
-            match instruction {
-                Instruction::Increment(n) => {
-                    // TODO: Handle memory cell becoming negative
-                    *cell = (*cell).saturating_add_signed(*n as i8);
-                }
-                Instruction::Shift(n) => {
-                    let target: usize = if *n > 0 {
-                        // TODO: handle going past the edge
-                        self.mem_ptr.saturating_add(*n as usize)
-                    } else {
-                        // TODO: handle going below zero
-                        self.mem_ptr.saturating_sub(n.neg().try_into().unwrap())
-                    };
-                    self.mem_ptr = target;
-                }
-                Instruction::Print => {
-                    print!("{}", *cell as char);
-                }
-                Instruction::JumpIfZero(target) if *cell == 0 => {
-                    self.i_ptr = *target;
-                    continue;
-                    // These are matched, otherwise we'd have gotten a syntax error
-                }
-                Instruction::JumpIfNotZero(target) if *cell != 0 => {
-                    self.i_ptr = *target;
-                    continue;
-                }
-                _ => {}
+            match self.eval_one(instruction) {
+                Ok(next_instruction) => self.i_ptr = next_instruction,
+                Err(err) => panic!("Runtime error: {:?}", err),
             }
-
-            self.i_ptr += 1;
         }
+    }
+
+    pub fn eval_one(&mut self, instruction: &Instruction) -> Result<usize, RuntimeError> {
+        let cell = &mut self.memory[self.mem_ptr];
+
+        match instruction {
+            Instruction::Increment(n) => {
+                if *n < 0 && n.abs() > (*cell).into() {
+                    return Err(RuntimeError::NegativeRegister);
+                }
+                *cell = cell.saturating_add_signed(*n as i8);
+            }
+            Instruction::Shift(n) => {
+                let target = if *n > 0 {
+                    self.mem_ptr.checked_add(*n as usize)
+                } else {
+                    self.mem_ptr.checked_sub(n.abs() as usize)
+                };
+
+                if let Some(target) = target {
+                    if target >= MEMORY_CELLS {
+                        return Err(RuntimeError::NoMoreCells);
+                    }
+                    self.mem_ptr = target;
+                } else {
+                    return Err(RuntimeError::NoMoreCells);
+                }
+            }
+            Instruction::Print => {
+                print!("{}", *cell as char);
+            }
+            Instruction::JumpIfZero(target) if *cell == 0 => {
+                return Ok(*target);
+            }
+            Instruction::JumpIfNotZero(target) if *cell != 0 => {
+                return Ok(*target);
+            }
+            _ => {}
+        };
+
+        Ok(self.i_ptr + 1)
     }
 }
 
 pub fn compile(instructions: &[Statement]) -> Vec<Instruction> {
-    let mut state: State = State::Initial;
+    let mut state: CompilerState = CompilerState::Initial;
     let mut bytecode: Vec<Instruction> = vec![];
 
-    let flush_and_reset = |state: &mut State, bytecode: &mut Vec<Instruction>| {
+    let flush_and_reset = |state: &mut CompilerState, bytecode: &mut Vec<Instruction>| {
         match state {
-            State::Increment(n) if *n != 0 => {
+            CompilerState::Increment(n) if *n != 0 => {
                 bytecode.push(Instruction::Increment(*n));
             }
-            State::Shift(n) if *n != 0 => {
+            CompilerState::Shift(n) if *n != 0 => {
                 bytecode.push(Instruction::Shift(*n));
             }
             _ => {}
         }
-        *state = State::Initial;
+        *state = CompilerState::Initial;
     };
 
     for instruction in instructions {
         match (instruction, &state) {
-            (Statement::Increment, State::Increment(n)) => state = State::Increment(n + 1),
-            (Statement::Decrement, State::Increment(n)) => state = State::Increment(n - 1),
-            (Statement::ShiftRight, State::Shift(n)) => state = State::Shift(n + 1),
-            (Statement::ShiftLeft, State::Shift(n)) => state = State::Shift(n - 1),
+            (Statement::Increment, CompilerState::Increment(n)) => {
+                state = CompilerState::Increment(n + 1)
+            }
+            (Statement::Decrement, CompilerState::Increment(n)) => {
+                state = CompilerState::Increment(n - 1)
+            }
+            (Statement::ShiftRight, CompilerState::Shift(n)) => state = CompilerState::Shift(n + 1),
+            (Statement::ShiftLeft, CompilerState::Shift(n)) => state = CompilerState::Shift(n - 1),
 
             _ => {
                 flush_and_reset(&mut state, &mut bytecode);
 
                 match instruction {
-                    Statement::ShiftRight => state = State::Shift(1),
-                    Statement::ShiftLeft => state = State::Shift(-1),
-                    Statement::Increment => state = State::Increment(1),
-                    Statement::Decrement => state = State::Increment(-1),
+                    Statement::ShiftRight => state = CompilerState::Shift(1),
+                    Statement::ShiftLeft => state = CompilerState::Shift(-1),
+                    Statement::Increment => state = CompilerState::Increment(1),
+                    Statement::Decrement => state = CompilerState::Increment(-1),
 
                     Statement::Print => bytecode.push(Instruction::Print),
                     Statement::JumpIfZero(n) => bytecode.push(Instruction::JumpIfZero((*n).into())),
@@ -120,7 +141,6 @@ pub fn compile(instructions: &[Statement]) -> Vec<Instruction> {
     flush_and_reset(&mut state, &mut bytecode);
 
     resolve_jumps(&mut bytecode);
-    // TODO: Add a "program return" instruction at the end of every program
     bytecode
 }
 
@@ -232,5 +252,30 @@ mod tests {
                 Instruction::JumpIfNotZero(1)
             ]
         );
+    }
+
+    #[test]
+    fn cant_decrement_zero_mem_register() {
+        let mut vm = VM::default();
+        vm.eval_one(&Instruction::Increment(-1))
+            .expect_err("Expected operation to fail");
+    }
+
+    #[test]
+    fn cant_move_past_last_memory_cell() {
+        let mut vm = VM {
+            i_ptr: 0,
+            mem_ptr: 29999,
+            memory: [0; MEMORY_CELLS],
+        };
+        vm.eval_one(&Instruction::Shift(1))
+            .expect_err("Expected operation to fail");
+    }
+
+    #[test]
+    fn cant_move_before_first_memory_cell() {
+        let mut vm = VM::default();
+        vm.eval_one(&Instruction::Shift(-1))
+            .expect_err("Expected operation to fail");
     }
 }
