@@ -1,0 +1,17 @@
+#!/bin/sh
+
+usage() {
+    cat > /dev/stderr <<EOF
+usage: $0 [file_name]
+EOF
+
+    exit 1
+}
+
+if [ $# -eq 1 ]; then
+    cargo run < $1
+elif [ $# -eq 0 ]; then
+    cargo run
+else
+    usage
+fi

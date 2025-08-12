@@ -1,0 +1,41 @@
+Just a Brainf*ck interpreter. The code is pretty bad. It's the third time I sit
+down to "learn" Rust. I hope to restructure it to include more sophisticated
+idioms as I learn those.
+
+Features
+--------
+- Compiles the instruction to its own bytecode before running
+
+TODO
+----
+- Implement "Read" instruction (`,`)
+- Produce bytecode for richer idioms, such as `[-]` to set a register to zero
+- I think the REPL is broken
+- It prints out the "CCBF>" prompt, even when not run interactively
+- Audit the data structures I'm using. I'm sure I can use far more compact ones
+- Performance is not great. On my 12th-gen Intel Framework laptop, it runs `mandelbrot.bf` in 13±2 seconds
+- Run `hello-world.bf` and `mandelbrot.bf` as part of the test suite
+
+Language
+--------
+
+|---------|-----------------------------------------------------------|
+| Command | Description                                               |
+|=========+===========================================================|
+|   >     | Move the pointer to the right                             |
+|   <     | Move the pointer to the left                              |
+|   +     | Increment the memory cell at the pointer                  |
+|   -     | Decrement the memory cell at the pointer                  |
+|   .     | Output the character signified by the cell at the pointer |
+|   ,     | Input a character and store it in the cell at the pointer |
+|   [     | Jump past the matching ] if the cell at the pointer is 0  |
+|   ]     | Jump back to the matching [ if the cell at the pointer is |
+|         | nonzero                                                   |
+|---------|-----------------------------------------------------------|
+
+All characters other than ><+-.,[] are considered to be comments and are ignored.
+
+Example program
+---------------
+
+    Prints "Hi"++++++++++[>+>+++>+++++++>++++++++++<<<<-]>>>++.>+++++.<<<.
